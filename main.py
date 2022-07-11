@@ -8,18 +8,18 @@ from PyQt5.QtGui import *
 
 import sys
 
-from supervision_widget import DrawingWiget, SupervisionWidget 
+from supervision_widget import DrawingWiget, SupervisionMainWidget 
 
 class MainObject(QApplication):
     def __init__(self,argv) -> None:
         super().__init__(argv)
-        self.client_widget = ClientWidget()
+        #self.client_widget = ClientWidget()
         self.server_widget = MainWidget()
-        self.supervition_widget = SupervisionWidget()
+        self.supervition_widget = SupervisionMainWidget()
      
 
     def init_UI(self):
-        self.client_widget.send_client_info.connect(self.server_widget.server_widget.add_client_from_dict)
+        #self.client_widget.send_client_info.connect(self.server_widget.server_widget.add_client_from_dict)
         self.supervition_widget.send_info.connect(self.server_widget.server_widget.add_client_from_dict)
         self.supervition_widget.show()
         self.server_widget.show()

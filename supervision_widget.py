@@ -1,3 +1,4 @@
+import json
 from PyQt5.QtCore import *
 from PyQt5.QtWidgets import *
 from PyQt5.QtGui import *
@@ -32,6 +33,10 @@ class DrawingWiget(QWidget):
         self.previous_mouse_move_y = 0
         self.mouse_move_first_time = True 
 
+        # Cette variable décide que faire dans la fenêtre 
+        # Les valeurs possibles sont : ["button_TOR","Motor","Cursor","delete"]
+        self.graphic_action = ""
+
         #self.main_layout = QHBoxLayout()
         #self.main_layout.addWidget(self.drawing_scene)
 
@@ -40,7 +45,9 @@ class DrawingWiget(QWidget):
 
 
         self.drawed_objects =[
-            {
+            
+        ]
+        """{
                 "position" : QRect(50,50,100,100),
                 "object": MotorImage("images/motor.jpg")
             },
@@ -58,10 +65,13 @@ class DrawingWiget(QWidget):
                 "position" : QRect(100,100,100,50),
                 "object": Slider(100,100,100,50)
             }
-        ]
+        """
+        
 
-        for i in self.drawed_objects:
-            i.get("object").signal_emmiter.signal_emis.connect(self.send_info)
+    def set_graphic_action(self,action):
+        """Cette méthode décide quelle action va être faite lors du double clik prochain"""
+        self.graphic_action = action 
+
 
     def set_animation_state(self):
         """Décide si l'animation doit continuer ou pas."""
@@ -149,12 +159,98 @@ class DrawingWiget(QWidget):
                 self.update()
                 self.repaint()
             """
-            if object_double_clicked.get("object").type != "slider":
-                object_double_clicked.get("object").show_dialog_widget()
+            if(self.graphic_action == "Delete"):
+                self.drawed_objects.remove(object_double_clicked)
+                self.update()
+                self.repaint()
+            else:
+                if object_double_clicked.get("object").type != "slider":
+                    object_double_clicked.get("object").show_dialog_widget()
 
+        else:
+            print("Can add element")
+            if(self.graphic_action =="Button_TOR"):
+                print("Button_TOR")
+                self.drawed_objects.append(
+                    {
+                        "position" : QRect(event.x(),event.y(),100,100),
+                        "object": InterrupteurImage("images/interrupteur_bas.jpg",
+                                    "images/interrupteur_haut.jpg",0)
+                    }
+                )
+                
 
+            elif self.graphic_action == "Motor":
+                self.drawed_objects.append(
+                    {
+                        "position" : QRect(event.x(),event.y(),100,100),
+                        "object": MotorImage("images/motor.jpg")
+                    }
+                )
 
+            elif self.graphic_action == "Cursor":
+                self.drawed_objects.append(
+                    {
+                        "position" : QRect(event.x(),event.y(),100,50),
+                        "object": Slider(event.x(),event.y(),100,50)
+                    }
+                )
+
+            self.update()
+            self.repaint()
+
+            for i in self.drawed_objects:
+                i.get("object").signal_emmiter.signal_emis.connect(self.send_info)
         return super().mouseDoubleClickEvent(event)
+
+    def get_data_to_save(self):
+        l = []
+        for i in self.drawed_objects:
+            a = i.get("position")
+            dic = {
+                "type": i.get("object").type,
+                "position" : [a.x(),a.y(),a.width(),a.height()]
+            }
+            l.append(dic)
+
+        return str(l)
+
+    def load_data(self,text):
+        """Prend un text et crée les objets graphiques qu'il faut """
+        text = text.replace("'",'"')
+        print(text)
+        data = json.loads(text)
+
+        self.drawed_objects = []
+
+        for i in data:
+            if i.get("type") == "motor":
+                self.drawed_objects.append( 
+                    {   
+                        "position" : QRect(i.get("position")[0],i.get("position")[1],100,100),
+                        "object": MotorImage("images/motor.jpg")
+                    }
+                )
+            elif i.get("type") == "interrupteur":
+                self.drawed_objects.append(
+                    {
+                    "position" : QRect(i.get("position")[0],i.get("position")[1],100,100),
+                    "object": InterrupteurImage("images/interrupteur_bas.jpg",
+                                    "images/interrupteur_haut.jpg",0)
+                    }
+                )
+            elif i.get("type") == "slider":
+                self.drawed_objects.append(
+                    {
+                        "position" : QRect(i.get("position")[0],i.get("position")[1],100,50),
+                        "object": Slider(i.get("position")[0],i.get("position")[1],100,50)
+                    }
+                )
+
+        self.update()
+        self.repaint()
+
+
 
     def mouseMoveEvent(self, event) -> None:
         position = (event.x(),event.y())
@@ -245,10 +341,119 @@ class SupervisionWidget(QWidget):
 
         self.setLayout(self.main_layout)
 
-        
+
+
+class SupervisionMainWidget(QMainWindow):
+    send_info = pyqtSignal(dict)
+    def __init__(self):
+        super().__init__()
+
+        self.filename = ""
+        self.is_saved = True 
+        self.has_file = False 
+
+        self.main_widget = SupervisionWidget()
+
+        self.capteur_TOR_action = QAction(QIcon("images/interrupteur_haut.jpg"),"TOR")
+        self.motor_action = QAction(QIcon("images/motor.jpg"),"Moteur")
+        self.cursor_action = QAction(QIcon("images/cursor.jpg"),"Cursor")
+
+        self.capteur_TOR_action.setCheckable(True)
+        self.motor_action.setCheckable(True)
+        self.cursor_action.setCheckable(True)
+
+        self.save_action = QAction(QIcon("images/save.png"),"Sauvegarder")
+        self.open_action = QAction(QIcon("images/open.png"),"Ouvrir")
+
+        self.delete_action = QAction(QIcon("images/delete.png"),"Supprimer")
+
+        self.toolbar = self.addToolBar("")
+
+        self.main_widget.send_info.connect(self.send_info)
+
+
+        self.init_UI()
+
+    def init_UI(self):
+        self.setGeometry(400,200,500,500)
+        self.toolbar.addAction(self.open_action)
+        self.toolbar.addAction(self.save_action)
+        self.toolbar.addSeparator()
+        self.toolbar.addAction(self.capteur_TOR_action)
+        self.toolbar.addAction(self.motor_action)
+        self.toolbar.addAction(self.cursor_action)
+        self.toolbar.addSeparator()
+        self.toolbar.addAction(self.delete_action)
+
+        self.setCentralWidget(self.main_widget)
+
+        self.open_action.triggered.connect(self.open)
+        self.save_action.triggered.connect(self.save)
+
+        self.capteur_TOR_action.triggered.connect(self.set_capteurt_TOR_action)
+        self.motor_action.triggered.connect(self.set_motor_action)
+        self.cursor_action.triggered.connect(self.set_cursor_action)
+        self.delete_action.triggered.connect(self.set_delete_action)
+
+    def open(self):
+        dialog = QFileDialog.getOpenFileName(self,"Ouvrir un fichier",str(),"*el_sch")
+        if(dialog[0]):
+            self.filename = dialog[0]
+            f = open(self.filename,"r")
+            text = f.read()
+            self.main_widget.drawing_widget.load_data(text)
+            f.close()
+
+ 
+    def save(self):
+        dialog = QFileDialog.getSaveFileName(self,"Enrégistrer le fichier",str(),".*el_sch")
+        if(dialog[0]):
+            text = self.main_widget.drawing_widget.get_data_to_save()
+            self.filename = dialog[0]
+            self.has_file = True 
+
+            f = open(self.filename+".el_sch","w")
+            f.write(text)
+            f.close()
+
+
+    def set_motor_action(self):
+        # Les valeurs possibles sont : ["button_TOR","Motor","Cursor","delete"]
+        self.main_widget.drawing_widget.set_graphic_action("Motor")
+
+        self.capteur_TOR_action.setChecked(False)
+        self.cursor_action.setChecked(False)
+        self.delete_action.setChecked(False)
+
+    def set_cursor_action(self):
+        # Les valeurs possibles sont : ["button_TOR","Motor","Cursor","delete"]
+        self.main_widget.drawing_widget.set_graphic_action("Cursor")
+
+        self.capteur_TOR_action.setChecked(False)
+        self.motor_action.setChecked(False)
+        self.delete_action.setChecked(False)
+
+    def set_delete_action(self):
+        # Les valeurs possibles sont : ["Button_TOR","Motor","Cursor","Delete"]
+        self.main_widget.drawing_widget.set_graphic_action("Delete")
+
+        self.motor_action.setChecked(False)
+        self.cursor_action.setChecked(False)
+        self.capteur_TOR_action.setChecked(False)
+
+    def set_capteurt_TOR_action(self):
+        # Les valeurs possibles sont : ["button_TOR","Motor","Cursor","delete"]
+        self.main_widget.drawing_widget.set_graphic_action("Button_TOR")
+
+        self.motor_action.setChecked(False)
+        self.cursor_action.setChecked(False)
+        self.delete_action.setChecked(False)
+
+
+
 if __name__ == "__main__":
     app = QApplication(sys.argv)
-    w = SupervisionWidget()
-    
+    w = SupervisionMainWidget()
     w.show()
     sys.exit(app.exec_())
+
